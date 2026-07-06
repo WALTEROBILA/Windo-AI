@@ -24,16 +24,17 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 import re
 import streamlit as st
 from io import BytesIO 
+from PyPDF2 import PdfReader
+import tempfile 
 
-st.subheader("Tailored, ATS-friendly Resume and Cover Letter Generator")
+
+st.title("Tailored, ATS-friendly Resume and Cover Letter Generator")
 
 load_dotenv()
 
 model = ChatGroq(model="llama-3.3-70b-versatile")
 
 # model = ChatGroq(model="llama-3.1-8b-instant")
-
-# url = "https://reliefweb.int/job/4213251/tupande-mel-data-senior-supervisor"
 
 url = st.text_input("Paste a valid job advertisment url")
 
@@ -79,16 +80,6 @@ def read_webpage(url):
     return text
 
 
-#print(content)
-
-
-import os
-import json
-
-from PyPDF2 import PdfReader
-from docx import Document
-
-from langchain_core.messages import HumanMessage
 
 #Function to extract text from PDF / DOCX documents
 
@@ -323,8 +314,6 @@ RESUME:
 
         return {}
 
-import tempfile 
-
 def save_uploaded_file(uploaded_file):
     """
     Saves a Streamlit uploaded file to a temporary location and returns the file path
@@ -360,28 +349,6 @@ if generate:
         resume_profile = extract_resume_profile(resume_text)
 
         st.success("Documents processed succesfully!")
-
-    #usage
-    # if __name__ == "__main__":
-
-    #     file_path = r"C:\Users\Admin\Desktop\Windo\Dan Church Aid\Walter Obila Cover Letter.pdf"
-
-    #     # Step 1: Extract raw text
-    #     text = extract_text_from_document(file_path)
-
-    #     # Step 2: Extract structured profile
-    #     candidate_profile = extract_candidate_profile(text)
-
-    #     # Step 3: Print result
-    #     print(json.dumps(candidate_profile, indent=4))
-
-
-    #     # resume profile
-    #     resume_path = r"C:\Users\Admin\Desktop\Windo\Dalberg Data Insight\ADERO WALTER OBILA CV.pdf"
-    #     resume_text = extract_text_from_document(resume_path)
-    #     print(resume_text) 
-    #     resume_profile = extract_resume_profile(resume_text)
-
 
 
     def is_job_advertisement_node(content):
@@ -447,9 +414,7 @@ if generate:
 
         resume_references: list
 
-    from datetime import datetime
-    from langchain_core.messages import HumanMessage
-    import json
+
 
 
     #Function to build the cover letter
@@ -459,9 +424,7 @@ if generate:
 
         try:
 
-            # -----------------------------------
             # Candidate Profile
-            # -----------------------------------
             profile = state["candidate_profile"]
 
             job_posting = state["content"]
@@ -472,9 +435,7 @@ if generate:
 
             current_date = datetime.now().strftime("%d %B %Y")
 
-            # -----------------------------------
             # Applicant Header
-            # -----------------------------------
             applicant_header = f"""
     {name}
     {email}
@@ -598,11 +559,6 @@ if generate:
                 "company_header": ""
             }
 
-
-    from docx import Document
-    from docx.shared import Pt
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
-
     #Function to save the cover letter to a word document
     def save_cover_letter_to_word(
         applicant_header,
@@ -711,7 +667,12 @@ if generate:
 
     {{
         "professional_summary": "",
-        "core_competencies": [],
+        "core_competencies:[
+            {{
+                "category":"",
+                "skills":[]
+            }}
+        ],
         "experience": [
             {{
                 "title":"",
@@ -763,13 +724,63 @@ if generate:
 
     - ATS friendly.
 
-    - For the core competencies, do not list all skills lifted from the resume. Select the ones relevant to the job posting, ensuring a majority of those mentioned in the posting are included. I want 
-        the core competencies to be grouped into categories if applying for tech roles, by competency group and the skills/techniologies entailed. e.g
-            - Data Analysis - R, SPSS, Excel
-            - Machine Learning Modelling - Scikit-learn, TensorFlow
-            - Data Visualization - PowerBI, Tableau
-    - Ensure you have listed relevant competencies, as wells as the skills involved.
-    - The core competencies section can't be empty, can't be generic. Ensure it is convincingly populated.
+    CORE COMPETENCIES
+
+    Return the competencies as structured JSON.
+
+    Each competency MUST contain:
+
+    {{
+        "category":"",
+        "skills":[]
+    }}
+
+    Example:
+
+    "core_competencies":[
+        {{
+            "category":"Data Analysis",
+            "skills":[
+                "Python",
+                "R",
+                "SPSS",
+                "Excel"
+            ]
+        }},
+        {{
+            "category":"Machine Learning",
+            "skills":[
+                "Scikit-learn",
+                "TensorFlow",
+                "XGBoost"
+            ]
+        }},
+        {{
+            "category":"Data Visualization",
+            "skills":[
+                "Power BI",
+                "Tableau",
+                "Matplotlib"
+            ]
+        }}
+    ]
+
+    Rules:
+
+    - Return between 4 and 8 competency groups.
+    - Each category must contain between 3 and 8 relevant skills.
+    - Prioritize the skills, tools an technologies appearing in the candidate profile, but you can embellish some so as to make the candidate appear a strong fit.
+    - Reorder and prioritize them according to the job posting.
+    - Never return placeholders.
+    - Never return values such as:
+        "categoryskills"
+        "skills"
+        "category"
+        "Technical Skills"
+        "Other"
+    - Every category must have a meaningful name.
+    
+
 
     EDUCATION
     - Preserve all education entries.
@@ -946,11 +957,18 @@ if generate:
             level=1
         )
 
-        for skill in competencies:
-            document.add_paragraph(
-                skill,
-                style="List Bullet"
-            )
+
+        for comp in competencies:
+
+            category = comp.get("category", "")
+            skills = comp.get("skills", [])
+
+            p = document.add_paragraph(style="List Bullet")
+
+            run = p.add_run(category + ": ")
+            run.bold = True
+
+            p.add_run(", ".join(skills))      
 
         #Professional Experience
         document.add_heading(
@@ -1190,10 +1208,6 @@ if generate:
                 "References available upon request."
             )   
 
-        #Save the resume
-        # document.save(file_name)
-
-        # print(f"Saved as {file_name}")
         output = BytesIO()
         document.save(output)
         output.seek(0)
@@ -1219,17 +1233,6 @@ if generate:
     graph.add_node("Resume Builder", resume_builder_node)
 
     graph.set_entry_point("Check Advertisement")
-
-
-    # graph.add_conditional_edges(
-    #     "Check Advertisement",
-    #     advertisement_router,
-    #     {
-    #         "yes": "Cover Letter Generator",
-    #         "no": END
-    #     }
-    # )
-
 
     graph.add_edge("Check Advertisement", "Cover Letter Generator")
     graph.add_edge("Cover Letter Generator", "Resume Builder")
@@ -1281,50 +1284,3 @@ if "resume_doc" in st.session_state:
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
 
-
-
-
-# result = app.invoke({
-#     "content": content,
-#     "candidate_profile": candidate_profile,
-#     "resume_profile": resume_profile
-# })
-
-
-# cover_letter = result["cover_letter"]
-
-
-# cover_letter_doc = save_cover_letter_to_word(
-#     applicant_header=result["applicant_header"],
-#     company_header = result["company_header"],
-#     cover_letter=result["cover_letter"],
-#     applicant_name=candidate_profile.get("name", "")
-#     # file_name="Walter_Obila_Cover_Letter.docx"
-# )
-
-
-# resume_doc = save_resume_to_word(
-#     resume_profile=result["resume_profile"],
-#     summary=result["resume_summary"],
-#     competencies=result["resume_core_competencies"],
-#     experience=result["resume_experience"],
-#     projects=result["resume_projects"],
-#     education=result["resume_education"],
-#     certifications=result["resume_certifications"],
-#     references=result["resume_references"]
-#     # file_name="Walter_Obila_Resume.docx"
-# )
-
-# st.download_button(
-#     label = "📄 Download Cover Letter",
-#     data = cover_letter_doc,
-#     file_name = "Cover_Letter.docx",
-#     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-# )
-
-# st.download_button(
-#     label = "📄 Download Resume",
-#     data = resume_doc,
-#     file_name = "resume.docx",
-#     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-# )
